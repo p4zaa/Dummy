@@ -4,9 +4,8 @@ import polars as pl
 import string
 from typing import Callable, List, Optional, Union, Any
 
-
 class Dummy:
-    def __init__(self, schemas: dict, n_samples: int = 100, polars: bool = True, default_string_length: int = 5, seed: Optional[int] = None):
+    def __init__(self, schemas: dict, n_samples: int = None, polars: bool = True, default_string_length: int = 5, seed: Optional[int] = None):
         self.schemas = schemas
         self.n_samples = n_samples
         self.polars = polars
@@ -14,11 +13,26 @@ class Dummy:
         self.seed = seed
         
         # Set the seed if provided
-        #if self.seed is not None:
-        #    random.seed(self.seed)
-
         self.random_gen = random.Random(seed)  # Use random.Random for local state
     
+        # Dynamically set n_samples if None
+        if self.n_samples is None:
+            self.n_samples = self._calculate_n_samples()
+    
+    def _calculate_n_samples(self):
+        """Calculate n_samples based on the shortest list in the schema."""
+        min_length = float('inf')
+        for config in self.schemas.values():
+            randomizer = config.get('randomizer')
+            if isinstance(randomizer, list):
+                min_length = min(min_length, len(randomizer))
+        
+        if min_length == float('inf'):
+            raise ValueError("No list of values provided in any column to determine n_samples.")
+        
+        print(f'Set n_samples dynamically to {min_length}')
+        return min_length
+
     def _default_randomizer(self, col_type: str):
         """Return a default randomizer based on the column type."""
         if col_type == 'int':
@@ -35,20 +49,17 @@ class Dummy:
         col_type = config['type']
         null_prob = config.get('nullable', 0.0)
         allow_duplicates = config.get('allow_duplicates', True)
-        default_randomizer = False if config.get('randomizer', None) else True
 
-        # Set randomizer if not provided
-        randomizer = config.get('randomizer', None) or self._default_randomizer(col_type)
-
-        data = []
-        unique_values = set()
-
-        # If a fixed list of values is provided
+        # If a list is provided as randomizer, use it by default
+        randomizer = config.get('randomizer')
         if isinstance(randomizer, list):
-            if not allow_duplicates and len(randomizer) < self.n_samples:
+            data = []
+            unique_values = set()
+
+            if not allow_duplicates and (len(randomizer) < self.n_samples) and (len(set(randomizer)) < self.n_samples):
                 raise ValueError(f"Not enough unique values in the provided list for '{col_type}' column.")
             
-            for _ in range(self.n_samples):
+            '''for _ in range(self.n_samples):
                 if self.random_gen.random() < null_prob:
                     data.append(None)
                 else:
@@ -59,10 +70,28 @@ class Dummy:
                         while value in unique_values:
                             value = self.random_gen.choice(randomizer)
                         data.append(value)
-                        unique_values.add(value)
+                        unique_values.add(value)'''
 
-        # If no fixed list but allow_duplicates is False and no custom randomizer, generate unique values
-        elif not allow_duplicates and default_randomizer:
+            if allow_duplicates and len(randomizer) < self.n_samples:
+                data = randomizer
+                remain = self.n_samples - len(randomizer)
+                for _ in range(remain):
+                    if self.random_gen.random() < null_prob:
+                        data.append(None)
+                    data.append(self.random_gen.choice(randomizer))
+            else:
+                data = randomizer[:self.n_samples]
+
+            return data[:self.n_samples]
+        
+        # Use default randomizer if a list is not provided
+        randomizer = randomizer or self._default_randomizer(col_type)
+
+        data = []
+        unique_values = set()
+
+        # Handle the case where allow_duplicates is False and no fixed list is provided
+        if not allow_duplicates:
             if col_type == 'int':
                 # Generate enough unique integer values
                 possible_values = range(1, 99999 + 1)
@@ -86,7 +115,7 @@ class Dummy:
                 else:
                     data.append(value)
 
-        # Custom randomizer or allow_duplicates case
+        # Default randomizer and allow_duplicates case
         else:
             for _ in range(self.n_samples):
                 if self.random_gen.random() < null_prob:
@@ -96,10 +125,6 @@ class Dummy:
                     if allow_duplicates or value not in unique_values:
                         data.append(value)
                         unique_values.add(value)
-
-            # Ensure uniqueness if allow_duplicates is False
-            if not allow_duplicates and len(unique_values) < self.n_samples:
-                raise ValueError(f"Random generation did not provide enough unique values for '{col_type}' column.")
 
         return data
 
