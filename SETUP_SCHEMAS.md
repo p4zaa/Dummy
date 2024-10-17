@@ -1,130 +1,91 @@
-# Setting Up Schemas in the Dummy Data Generation Library
+
+# Setting Up Schemas for Dummy Data Generation
 
 ## Overview
 
-Schemas define the structure and properties of the data you want to generate using the Dummy library. Each column in a schema can be customized with various attributes, including data type, nullability, duplicates, and randomizers.
+The `Dummy` class is designed to generate dummy data based on defined schemas. The schemas dictate the structure and characteristics of the data, including types, nullability, randomizers, and other configurations.
 
-## Schema Structure
+## Initializing the Dummy Class
 
-A schema is defined as a dictionary where each key is a column name, and its value is another dictionary specifying the column's properties. Below are the key properties you can set for each column:
-
-### Properties
-
-- **type**: Specifies the data type of the column. Common types include:
-  - `int`: Integer values
-  - `float`: Floating-point values
-  - `str`: String values
-- **nullable**: A float value between `0.0` and `1.0` indicating the probability of a column containing null values.
-  - `0.0`: No null values
-  - `1.0`: All values are null
-- **allow_duplicates**: A boolean value indicating whether duplicate values are allowed in the column.
-  - `True`: Duplicates are allowed
-  - `False`: No duplicates allowed
-- **randomizer**: A callable function or a fixed list used to generate data for the column. If set to `None`, a default randomizer will be used based on the column type.
-
-### Example Schema
-
-Here’s a simple example of a schema for generating a dataset with three columns: `id`, `name`, and `score`.
+To use the `Dummy` class, you need to provide schemas along with optional parameters. Here’s how to initialize it:
 
 ```python
-schema = {
-    'id': {
+from your_dummy_module import Dummy
+
+schemas = {
+    'column_name': {
+        'type': 'int',  # or 'float', 'str'
+        'nullable': 0.1,  # Probability of null values
+        'randomizer': [1, 2, 3, 4, 5],  # Optional fixed list of values
+        'allow_duplicates': True,  # Whether to allow duplicate values
+    },
+    # Add more columns as needed
+}
+
+dummy_generator = Dummy(schemas=schemas, n_samples=None, polars=True, default_string_length=5, seed=42)
+```
+
+### Parameters
+
+- `schemas` (dict): A dictionary defining the schema for each column.
+- `n_samples` (int, optional): The number of samples to generate. If not provided, it is set automatically based on the shortest list in the schema.
+- `polars` (bool): If `True`, the output will be a Polars DataFrame; otherwise, it will be a Pandas DataFrame.
+- `default_string_length` (int): Default length for generated strings.
+- `seed` (int, optional): Seed for random number generation to ensure reproducibility.
+
+## Defining Schemas
+
+Each column in the schemas can have the following properties:
+
+- `type`: The data type of the column. Supported types are `'int'`, `'float'`, and `'str'`.
+- `nullable`: Probability (between 0 and 1) of generating a `None` value.
+- `randomizer`: A list of values from which to randomly select, if provided. If not provided, a default randomizer is used based on the column type.
+- `allow_duplicates`: Whether to allow duplicate values in the column. Defaults to `True`.
+
+### Example of a Schema Definition
+
+```python
+schemas = {
+    'age': {
         'type': 'int',
-        'nullable': 0.0,
+        'nullable': 0.1,
+        'randomizer': list(range(18, 60)),  # Age range from 18 to 59
         'allow_duplicates': False,
-        'randomizer': None  # Use default randomizer for integers
+    },
+    'salary': {
+        'type': 'float',
+        'nullable': 0.2,
+        'randomizer': None,  # Will use default randomizer
+        'allow_duplicates': True,
     },
     'name': {
         'type': 'str',
-        'nullable': 0.1,  # 10% chance of null values
+        'nullable': 0.05,
+        'randomizer': [ 'Alice', 'Bob', 'Charlie', 'David', 'Eve' ],
         'allow_duplicates': True,
-        'randomizer': ['Alice', 'Bob', 'Charlie']  # Fixed list randomizer
     },
-    'score': {
-        'type': 'float',
-        'nullable': 0.2,  # 20% chance of null values
-        'allow_duplicates': False,
-        'randomizer': None  # Use default randomizer for floats
-    }
 }
 ```
 
-## Detailed Property Descriptions
+## Using Lambda Functions in Randomizers
 
-### 1. **Type**
-Defines the data type of the column. Here are the types you can use:
+You can also use lambda functions as randomizers for generating data. Here’s an example of how to use a lambda function for the `salary` column:
 
-- `int`: Generates random integers.
-- `float`: Generates random floating-point numbers.
-- `str`: Generates random strings (can be fixed values or generated dynamically).
+```python
+schemas = {
+    'salary': {
+        'type': 'float',
+        'nullable': 0.2,
+        'randomizer': lambda: round(random.uniform(30000, 120000), 2),  # Salary between 30k and 120k
+        'allow_duplicates': True,
+    },
+}
+```
 
-### 2. **Nullable**
-Determines the likelihood of a value being `None`. For example:
-
-- If set to `0.0`, all values will be present.
-- If set to `0.5`, approximately 50% of the values may be `None`.
-
-### 3. **Allow Duplicates**
-Controls whether duplicate values can occur in the column. For example:
-
-- Setting this to `False` ensures all generated values are unique (excluding null values).
-- Setting it to `True` allows for repeated values.
-
-### 4. **Randomizer**
-Specifies how values for the column are generated:
-
-- **Using a Callable**: You can define a function that generates values.
-  
-  ```python
-  import random
-
-  def generate_random_age():
-      return random.randint(18, 60)
-
-  schema = {
-      'age': {
-          'type': 'int',
-          'nullable': 0.0,
-          'allow_duplicates': True,
-          'randomizer': generate_random_age  # Custom randomizer function
-      }
-  }
-  ```
-
-- **Using a List**: You can provide a list of fixed values from which to randomly select.
-  
-  ```python
-  schema = {
-      'status': {
-          'type': 'str',
-          'nullable': 0.0,
-          'allow_duplicates': False,
-          'randomizer': ['Active', 'Inactive', 'Pending']  # Fixed list randomizer
-      }
-  }
-  ```
-
-- **Using a Lambda Function**: You can use a lambda function for simple randomizers. This is useful for generating values inline without defining a separate function.
-
-  ```python
-  schema = {
-      'height': {
-          'type': 'float',
-          'nullable': 0.0,
-          'allow_duplicates': True,
-          'randomizer': lambda: random.uniform(150.0, 200.0)  # Random float between 150 and 200
-      },
-      'age': {
-          'type': 'int',
-          'nullable': 0.0,
-          'allow_duplicates': True,
-          'randomizer': lambda: random.randint(18, 60)  # Random integer between 18 and 60
-      }
-  }
-  ```
+### Note
+- Ensure that the randomizer matches the specified column type.
+- If using a list as a randomizer, the number of unique values should be sufficient to meet the `n_samples` requirement if `allow_duplicates` is set to `False`.
 
 ## Conclusion
 
-Setting up schemas in the Dummy library allows you to customize the data generation process to fit your needs. By specifying column types, nullability, duplicates, and randomizers, you can create realistic datasets for testing and development.
-
-For more examples and usage, refer to the library documentation or source code.
+With the `Dummy` class, you can easily set up schemas for generating a variety of dummy data. This is particularly useful for testing, prototyping, or simulating data in applications. Adjust the parameters and schema definitions as needed to fit your specific use case.
